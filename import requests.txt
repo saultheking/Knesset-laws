@@ -1,0 +1,42 @@
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+import os
+
+# כתובת האתר של החוקים ברשומות
+BASE_URL = "https://main.knesset.gov.il/Activity/Legislation/Laws/Pages/LawReshumot.aspx?t=LawReshumot&st=LawReshumot"
+DOWNLOAD_FOLDER = "laws_pdfs"
+
+# יצירת תיקייה לשמירת קובצי PDF
+if not os.path.exists(DOWNLOAD_FOLDER):
+    os.makedirs(DOWNLOAD_FOLDER)
+
+# שולח בקשת GET
+response = requests.get(BASE_URL)
+response.raise_for_status()  # בדיקה אם הבקשה הצליחה
+
+# יצירת אובייקט BeautifulSoup
+soup = BeautifulSoup(response.text, "html.parser")
+
+# מציאת החוקים המופיעים בעמוד
+laws = []
+for law in soup.find_all("div", class_="law-item"):  # עדכן את הסלקטור לפי מבנה האתר
+    title = law.find("a").text.strip()
+    link = law.find("a")["href"]
+    full_link = f"https://main.knesset.gov.il{link}" if link.startswith("/") else link
+    
+    # הורדת קובץ PDF אם קיים
+    if full_link.endswith(".pdf"):
+        pdf_response = requests.get(full_link)
+        pdf_filename = os.path.join(DOWNLOAD_FOLDER, title.replace(" ", "_") + ".pdf")
+        with open(pdf_filename, "wb") as pdf_file:
+            pdf_file.write(pdf_response.content)
+        print(f"נשמר: {pdf_filename}")
+    
+    laws.append({"Title": title, "Link": full_link})
+
+# שמירת הנתונים לקובץ CSV
+laws_df = pd.DataFrame(laws)
+laws_df.to_csv("knesset_laws.csv", index=False, encoding="utf-8-sig")
+
+print("הנתונים נשמרו בקובץ knesset_laws.csv, וקובצי ה-PDF הורדו לתיקייה laws_pdfs.")
